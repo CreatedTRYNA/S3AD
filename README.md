@@ -7,5 +7,5 @@ The code is being prepared and will be released soon.
 ## TODO
 
 - [ ] Upload experimental results
-- [ ] Upload training and testing code
+- [✅] Upload training and testing code
 - [ ] Upload checkpoints and dataset

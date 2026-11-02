@@ -1,3 +1,4 @@
+import os
 from argparse import Namespace
 from timm.data.constants import IMAGENET_DEFAULT_MEAN
 from timm.data.constants import IMAGENET_DEFAULT_STD
@@ -26,7 +27,6 @@ class cfg(cfg_common, cfg_dataset_default):
 		self.lr = 0.001 * self.batch_train / 20
 		# self.lr = 0.001
 		self.weight_decay = 0.0001
-		self.cuda_devices = "1"  # 指定使用的CUDA设备编号，可以设置为"0,1,2,3"等
 		self.metrics = [
 			'mAUROC_sp_max', 'mAP_sp_max', 'mF1_max_sp_max',
 			'mAUROC_px', 'mAP_px', 'mF1_max_px', 'mAUPRO_px',
@@ -35,7 +35,7 @@ class cfg(cfg_common, cfg_dataset_default):
 
 		# ==> data
 		self.data.type = 'DefaultAD'
-		self.data.root = '/home/pengzhonghua/data/datasets/visa'
+		self.data.root = os.path.join(os.environ.get('S3AD_DATA_ROOT', 'datasets'), 'visa')
 		self.data.meta = 'meta.json'
 		# self.data.cls_names = ['pcb1', 'pcb2', 'pcb3', 'pcb4']  # 只使用PCB相关的类别
 		self.data.cls_names = [] 
@@ -103,10 +103,9 @@ class cfg(cfg_common, cfg_dataset_default):
 		else:
 			raise ValueError(f"不支持的teacher类型: {teacher_type}")
 		
-		# 设置OmniAD模型配置
+		# 设置S3AD模型配置
 		self.model = Namespace()
-		# self.model.name = 'omniAD_MHSA'
-		self.model.name = 'omniAD_MHSA_Exchange'
+		self.model.name = 'S3AD'
 		self.model.kwargs = dict(
 			pretrained=False, 
 			checkpoint_path='', 
@@ -124,7 +123,7 @@ class cfg(cfg_common, cfg_dataset_default):
 		self.optim.kwargs = dict(name='adamw', betas=(0.9, 0.999), eps=1e-8, weight_decay=self.weight_decay, amsgrad=False)
 
 		# ==> trainer
-		self.trainer.name = 'OmniadTrainer'
+		self.trainer.name = 'S3ADTrainer'
 		self.trainer.logdir_sub = ''
 		self.trainer.resume_dir = ''
 		self.trainer.epoch_full = self.epoch_full

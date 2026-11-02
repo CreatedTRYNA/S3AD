@@ -769,7 +769,7 @@ class EFPN(nn.Module):
     
     
 class S3AD_module(nn.Module):
-    def __init__(self, model_t, model_s, max_cache_batches=None):
+    def __init__(self, model_t, model_s):
         super(S3AD_module, self).__init__()
         self.net_t = get_model(model_t)
         
@@ -833,49 +833,10 @@ class S3AD_module(nn.Module):
 
         self.frozen_layers = ['net_t']
 
-        # 初始化缓存相关属性
-        self.feats_t_cache = []
-        self.epoch = 0
-        self.batch_idx = 0
-        self.max_cache_batches = max_cache_batches  # 限制缓存的最大batch数量
-
     def freeze_layer(self, module):
         module.eval()
         for param in module.parameters():
             param.requires_grad = False
-
-    def on_epoch_start(self):
-        """在每个epoch开始时调用，用于更新epoch计数和重置batch索引。"""
-        if self.training:
-            self.epoch += 1
-        self.batch_idx = 0
-
-        # 如果不是第一个epoch，可以清理缓存以节省内存
-        if self.training and self.epoch > 1:
-            self.clear_cache()
-
-    def on_epoch_end(self):
-        """在每个epoch结束时调用，用于清理和重置。"""
-        self.batch_idx = 0
-        # 可选：在epoch结束时清理GPU缓存
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-    def clear_cache(self):
-        """清理特征缓存以释放内存"""
-        if hasattr(self, 'feats_t_cache') and self.feats_t_cache:
-            # 清空缓存列表
-            for cached_feats in self.feats_t_cache:
-                for feat in cached_feats:
-                    del feat
-            self.feats_t_cache.clear()
-
-            # 强制垃圾回收
-            import gc
-            gc.collect()
-
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
 
     def train(self, mode=True):
         self.training = mode
@@ -885,32 +846,7 @@ class S3AD_module(nn.Module):
             else:
                 module.train(mode)
 
-        # 当切换到训练模式时，重置所有相关状态
-        if mode:
-            self.epoch = 0
-            self.batch_idx = 0
-            self.clear_cache()  # 清理之前可能存在的缓存
-
         return self
-
-    def _should_cache_features(self):
-        """判断是否应该缓存特征"""
-        if self.max_cache_batches is None:
-            return True
-        return len(self.feats_t_cache) < self.max_cache_batches
-
-    def _get_cached_features(self, imgs):
-        """安全地获取缓存的特征"""
-        if self.batch_idx < len(self.feats_t_cache):
-            try:
-                cached_feats = self.feats_t_cache[self.batch_idx]
-                # 将特征移动到当前设备
-                feats_t = [f.to(imgs.device) for f in cached_feats]
-                return feats_t
-            except (IndexError, RuntimeError) as e:
-                print(f"Warning: Failed to load cached features at batch {self.batch_idx}: {e}")
-                return None
-        return None
 
     def _compute_teacher_features(self, imgs):
         """计算教师网络特征"""
@@ -919,32 +855,8 @@ class S3AD_module(nn.Module):
         return [f.detach() for f in feats_t]
 
     def forward(self, imgs):
-        if self.training:
-            # --- 训练模式下的缓存逻辑 ---
-            if self.epoch == 0:
-                # 第一个epoch：计算并缓存特征
-                feats_t = self._compute_teacher_features(imgs)
-
-                # 只在满足条件时缓存
-                if self._should_cache_features():
-                    # 将特征移动到CPU并分离计算图，以节省GPU显存
-                    cpu_feats = [f.detach().cpu() for f in feats_t]
-                    self.feats_t_cache.append(cpu_feats)
-
-            else:
-                # 后续epoch：尝试使用缓存的特征
-                feats_t = self._get_cached_features(imgs)
-
-                if feats_t is None:
-                    # 如果缓存失败，fallback到重新计算
-                    print(f"Warning: Cache miss at epoch {self.epoch}, batch {self.batch_idx}, recomputing features")
-                    feats_t = self._compute_teacher_features(imgs)
-
-            self.batch_idx += 1
-
-        else:
-            # 推理模式：直接计算特征
-            feats_t = self._compute_teacher_features(imgs) # [64,64,64] [128,32,32] [256,16,16]
+        # Always use the current images; batch-index caches are unsafe with shuffled data.
+        feats_t = self._compute_teacher_features(imgs)
 
         # 后续处理保持不变
         oce_out = self.Neck(feats_t)  # 16 512 8 8
@@ -967,24 +879,6 @@ class S3AD_module(nn.Module):
             return feats_t, feats_s_adapted
         else:
             return feats_t, feats_s  # 非 RN50 时，返回原始特征
-
-    def get_memory_usage(self):
-        """获取当前内存使用情况（调试用）"""
-        cache_size = len(self.feats_t_cache)
-        total_tensors = sum(len(cached_feats) for cached_feats in self.feats_t_cache)
-
-        info = {
-            'cached_batches': cache_size,
-            'total_cached_tensors': total_tensors,
-            'current_epoch': self.epoch,
-            'current_batch_idx': self.batch_idx
-        }
-
-        if torch.cuda.is_available():
-            info['gpu_memory_allocated'] = torch.cuda.memory_allocated() / 1024 ** 3  # GB
-            info['gpu_memory_reserved'] = torch.cuda.memory_reserved() / 1024 ** 3  # GB
-
-        return info
 
 @MODEL.register_module
 def S3AD(pretrained=False, **kwargs):

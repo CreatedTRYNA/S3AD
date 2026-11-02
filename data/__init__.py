@@ -57,6 +57,8 @@ def get_loader(cfg):
     # ===> 【新增：创建生成器】 <===
     g = torch.Generator()
     g.manual_seed(cfg.seed) # 使用全局种子
+    prefetch_factor = (getattr(cfg.trainer.data, 'prefetch_factor', 2)
+                       if cfg.trainer.data.num_workers_per_gpu > 0 else None)
 
     if cfg.dist:
         if cfg.data.sampler == 'naive':
@@ -82,7 +84,7 @@ def get_loader(cfg):
         pin_memory=cfg.trainer.data.pin_memory,
         drop_last=cfg.trainer.data.drop_last,
         persistent_workers=cfg.trainer.data.persistent_workers,
-        prefetch_factor=getattr(cfg.trainer.data, 'prefetch_factor', 2),
+        prefetch_factor=prefetch_factor,
         worker_init_fn=seed_worker,  # <== 关键修改点 1
         generator=g                  # <== 关键修改点 2
     )
@@ -102,7 +104,7 @@ def get_loader(cfg):
                                                       pin_memory=cfg.trainer.data.pin_memory,
                                                       drop_last=False,
                                                       persistent_workers=cfg.trainer.data.persistent_workers,
-                                                      prefetch_factor=getattr(cfg.trainer.data, 'prefetch_factor', 2),
+                                                      prefetch_factor=prefetch_factor,
                                                       worker_init_fn=seed_worker,  # <== 关键修改点 1
                                                       generator=g)                  # <== 关键修改点 2
             test_loaders[name] = test_loader
@@ -122,7 +124,7 @@ def get_loader(cfg):
                                                   pin_memory=cfg.trainer.data.pin_memory,
                                                   drop_last=False,
                                                   persistent_workers=cfg.trainer.data.persistent_workers,
-                                                  prefetch_factor=getattr(cfg.trainer.data, 'prefetch_factor', 2),
+                                                  prefetch_factor=prefetch_factor,
                                                   worker_init_fn=seed_worker,  # <== 关键修改点 1
                                                   generator=g)                  # <== 关键修改点 2
         return train_loader, test_loader

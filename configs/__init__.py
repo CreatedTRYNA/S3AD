@@ -18,11 +18,11 @@ def get_cfg(opt_terminal):
 	# cfg = Namespace(**cfg_terms)
 	for key, val in opt_terminal.__dict__.items():
 		cfg.__setattr__(key, val)
-	
-	cfg.command = f'python3 -m torch.distributed.launch --nproc_per_node=$nproc_per_node --nnodes=$nnodes --node_rank=$node_rank --master_addr=$master_addr --master_port=$master_port --use_env run.py -c {cfg.cfg_path} -m {cfg.mode} --sleep {cfg.sleep} --memory {cfg.memory} --dist_url {cfg.dist_url} --logger_rank {cfg.logger_rank} {" ".join(cfg.opts)}'
+
+	cfg.command = f'python3 -m torch.distributed.run --nproc_per_node=$nproc_per_node --nnodes=$nnodes --node_rank=$node_rank --master_addr=$master_addr --master_port=$master_port run.py -c {cfg.cfg_path} -m {cfg.mode} --sleep {cfg.sleep} --memory {cfg.memory} --dist_url {cfg.dist_url} --logger_rank {cfg.logger_rank} {" ".join(cfg.opts)}'
 	for opt in cfg.opts:
 		cfg_ghost = cfg
-		ks, v = opt.split('=')
+		ks, v = opt.split('=', 1)
 		ks = ks.split('.')
 		try:
 			v = literal_eval(v)
@@ -35,9 +35,10 @@ def get_cfg(opt_terminal):
 				else:
 					cfg_ghost.__setattr__(k, v)
 			else:
-				if k not in cfg_ghost:
-					cfg_ghost.__setattr__(k, Namespace())
-				cfg_ghost = cfg_ghost.__dict__[k]
+				if isinstance(cfg_ghost, dict):
+					cfg_ghost = cfg_ghost[k]
+				else:
+					cfg_ghost = getattr(cfg_ghost, k)
 	cfg.task_start_time = get_timepc()
 	return cfg
 

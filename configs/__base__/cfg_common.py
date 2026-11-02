@@ -34,7 +34,7 @@ class cfg_common(Namespace):
 
 		# ==> trainer
 		self.trainer = Namespace()
-		self.trainer.name = 'ViTADTrainer'
+		self.trainer.name = 'S3ADTrainer'
 		self.trainer.checkpoint = 'runs'
 		self.trainer.logdir_sub = ''
 		self.trainer.resume_dir = ''
@@ -49,7 +49,7 @@ class cfg_common(Namespace):
 		self.trainer.test_start_epoch = self.trainer.epoch_full
 		self.trainer.test_per_epoch = 30
 		self.trainer.find_unused_parameters = False
-		self.trainer.sync_BN = 'apex'  # [none, native, apex, timm]
+		self.trainer.sync_BN = 'native'  # [none, native, apex, timm]
 		self.trainer.dist_BN = ''  # [ , reduce, broadcast], valid when sync_BN is 'none'
 		self.trainer.scaler = 'none'  # [none, native, apex]
 
